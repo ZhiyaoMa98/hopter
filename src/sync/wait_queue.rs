@@ -114,7 +114,7 @@ impl WaitQueue {
             wq.inner.lock().must_with_full_access(|full_access| {
                 // Put the current task into the queue.
                 schedule::with_current_task_arc(|cur_task| {
-                    schedule::set_task_state_block(&cur_task);
+                    schedule::set_task_state_block(cur_task.as_ref());
                     let mut locked_queue = full_access.queue.lock();
                     locked_queue.push_back(cur_task);
                 });
@@ -179,7 +179,7 @@ impl WaitQueue {
 
                 // Otherwise, put the current task into the queue.
                 schedule::with_current_task_arc(|cur_task| {
-                    schedule::set_task_state_block(&cur_task);
+                    schedule::set_task_state_block(cur_task.as_ref());
                     locked_queue.push_back(cur_task);
                 });
 
@@ -259,7 +259,7 @@ impl WaitQueue {
 
                 // Put the current task into the queue.
                 schedule::with_current_task_arc(|cur_task| {
-                    schedule::set_task_state_block(&cur_task);
+                    schedule::set_task_state_block(cur_task.as_ref());
                     locked_queue.push_back(cur_task);
                 });
 

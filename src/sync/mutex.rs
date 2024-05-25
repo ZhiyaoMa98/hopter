@@ -1,4 +1,4 @@
-use super::super::{schedule, task::Task, unwind};
+use super::super::{schedule, task::TaskTrait, unwind};
 use super::{
     HeldInterrupt, Holdable, Lockable, Scheduler, SchedulerSuspendGuard, SpinGeneric,
     SpinGenericGuard, SpinSchedSafe, UnlockableGuard, WaitQueue,
@@ -44,7 +44,7 @@ where
     /// The wait queue for tasks being blocked to wait for their turn.
     queue: WaitQueue,
     /// The task that is currently holding this mutex.
-    owner: SpinSchedSafe<Option<Arc<Task>>>,
+    owner: SpinSchedSafe<Option<Arc<dyn TaskTrait>>>,
     /// If the mutex is released in an unwinding path, this variable will
     /// be set to `true`. This is just additional information to application
     /// code.

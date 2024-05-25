@@ -1,18 +1,18 @@
 use super::task_struct::TaskListAdapter;
-use super::Task;
+use super::TaskTrait;
 use alloc::sync::Arc;
 use intrusive_collections::LinkedList;
 
 /// Additional interfaces for task list.
 pub(in super::super) trait TaskListInterfaces {
-    fn push_back_tick_sorted(&mut self, new_task: Arc<Task>);
-    fn pop_highest_priority(&mut self) -> Option<Arc<Task>>;
+    fn push_back_tick_sorted(&mut self, new_task: Arc<dyn TaskTrait>);
+    fn pop_highest_priority(&mut self) -> Option<Arc<dyn TaskTrait>>;
 }
 
 impl TaskListInterfaces for LinkedList<TaskListAdapter> {
     /// Push a new task into the linked list. Maintain ascending order w.r.t.
     /// the tick number to wake up.
-    fn push_back_tick_sorted(&mut self, new_task: Arc<Task>) {
+    fn push_back_tick_sorted(&mut self, new_task: Arc<dyn TaskTrait>) {
         let mut cursor_mut = self.front_mut();
 
         // Move the cursor until we encounter a task with a higher wake up tick
@@ -32,7 +32,7 @@ impl TaskListInterfaces for LinkedList<TaskListAdapter> {
     /// Pop out the task with the highest priority in the linked list. If
     /// there are multiple tasks having the highest priority, the one in the
     /// front will be popped out. Return `None` if the list is empty.
-    fn pop_highest_priority(&mut self) -> Option<Arc<Task>> {
+    fn pop_highest_priority(&mut self) -> Option<Arc<dyn TaskTrait>> {
         let mut cursor = self.front();
 
         // Get the priority of the first task in the list.

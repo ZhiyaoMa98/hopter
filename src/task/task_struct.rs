@@ -7,6 +7,7 @@ use super::super::{
 use super::{
     priority::TaskPriority,
     segmented_stack::{self, HotSplitAlleviationBlock},
+    task_trait::TaskTrait,
     trampoline::{self, EntryClosureArg, RestartableEntryFuncArg},
 };
 use alloc::{
@@ -133,7 +134,7 @@ pub(in super::super) struct Task {
     /// the task entry trampoline function.
     downcast_func: Option<fn(&(dyn Any + Send + Sync + 'static)) -> *const u8>,
     /// Set when the task is a restarted instance of another panicked task.
-    restarted_from: Option<Weak<Task>>,
+    restarted_from: Option<Weak<dyn TaskTrait>>,
     /// The entry trampoline function the restarted task should run after
     /// being created.
     restart_entry_trampoline: Option<extern "C" fn(*const u8)>,
@@ -228,7 +229,7 @@ impl Task {
     /// Build a new task struct as the restarted instance of a previously
     /// panicked task. The new task will start its execution from the same
     /// closure using the same arguments as the panicked task.
-    pub(in super::super) fn build_restarted(prev_task: Arc<Task>) -> Result<Self, ()> {
+    pub(in super::super) fn build_restarted(prev_task: Arc<dyn TaskTrait>) -> Result<Self, ()> {
         let mut new_task = Self::new();
         new_task.restart_from(prev_task.clone())?;
 
@@ -502,7 +503,12 @@ impl Task {
     /// task.
     ///
     /// - `prev_task`: The panicked task.
-    fn restart_from(&mut self, prev_task: Arc<Task>) -> Result<(), ()> {
+    fn restart_from(&mut self, prev_task_arc: Arc<dyn TaskTrait>) -> Result<(), ()> {
+        let prev_task = prev_task_arc
+            .as_any()
+            .downcast_ref::<Task>()
+            .unwrap_or_die();
+
         // The task ID is kept the same as the panicked task.
         let id = prev_task.id.load(Ordering::SeqCst);
 
@@ -527,7 +533,7 @@ impl Task {
 
         // Record that this new task is a restarted instance from the panicked
         // task.
-        self.restarted_from = Some(Arc::downgrade(&prev_task));
+        self.restarted_from = Some(Arc::downgrade(&prev_task_arc));
 
         // FIXME: what if this newly built task struct fail to be inserted into
         // the ready queue?
@@ -546,56 +552,59 @@ impl Task {
     }
 }
 
-/// Field getters and Setters.
-impl Task {
-    pub(in super::super) fn get_sp(&mut self) -> u32 {
+impl TaskTrait for Task {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_sp(&mut self) -> u32 {
         self.ctxt.get_mut().sp
     }
 
-    pub(in super::super) fn get_stk_bound(&mut self) -> u32 {
+    fn get_stk_bound(&mut self) -> u32 {
         self.ctxt.get_mut().stklet_bound
     }
 
-    pub(in super::super) fn get_state(&self) -> TaskState {
+    fn get_state(&self) -> TaskState {
         self.state.load()
     }
 
-    pub(in super::super) fn set_state(&self, state: TaskState) {
+    fn set_state(&self, state: TaskState) {
         self.state.store(state);
     }
 
-    pub(in super::super) fn get_id(&self) -> u8 {
+    fn get_id(&self) -> u8 {
         self.id.load(Ordering::SeqCst)
     }
 
-    pub(in super::super) fn set_unwind_flag(&self, val: bool) {
+    fn set_unwind_flag(&self, val: bool) {
         self.is_unwinding.store(val, Ordering::SeqCst);
     }
 
-    pub(in super::super) fn is_unwinding(&self) -> bool {
+    fn is_unwinding(&self) -> bool {
         self.is_unwinding.load(Ordering::SeqCst)
     }
 
-    pub(in super::super) fn get_wake_tick(&self) -> u32 {
+    fn get_wake_tick(&self) -> u32 {
         self.wake_at_tick.load(Ordering::SeqCst)
     }
 
-    pub(in super::super) fn get_restart_origin_task(&self) -> Option<&Weak<Task>> {
+    fn get_restart_origin_task(&self) -> Option<&Weak<dyn TaskTrait>> {
         self.restarted_from.as_ref()
     }
 
-    pub(in super::super) fn set_wake_tick(&self, tick: u32) {
+    fn set_wake_tick(&self, tick: u32) {
         self.wake_at_tick.store(tick, Ordering::SeqCst);
     }
 
-    pub(in super::super) fn has_restarted(&self) -> bool {
+    fn has_restarted(&self) -> bool {
         self.has_restarted.load(Ordering::SeqCst)
     }
 
     /// Lock the task context and return the mutable raw pointer to the
     /// context. This is used when the scheduler picks a task to run.
     /// See [`Task`] for the invariants of the context.
-    pub(in super::super) fn lock_ctxt(&self) -> *mut TaskCtxt {
+    fn lock_ctxt(&self) -> *mut TaskCtxt {
         let mut locked_ctxt = self.ctxt.lock();
         let ptr = &mut *locked_ctxt as *mut _;
         core::mem::forget(locked_ctxt);
@@ -605,20 +614,17 @@ impl Task {
     /// Force unlock the task context. This is used when the previously
     /// running task yields or is blocked. See [`Task`] for the invariants
     /// of the context.
-    pub(in super::super) unsafe fn force_unlock_ctxt(&self) {
+    unsafe fn force_unlock_ctxt(&self) {
         self.ctxt.force_unlock()
     }
 
     /// Return the lock guard for accessing the hot-split alleviation block.
-    pub(in super::super) fn lock_hsab(&self) -> SpinGuard<HotSplitAlleviationBlock> {
+    fn lock_hsab(&self) -> SpinGuard<HotSplitAlleviationBlock> {
         self.hsab.lock()
     }
-}
 
-/// Priority related.
-impl Task {
     /// Get the priority of this task.
-    pub(in super::super) fn get_priority(&self) -> TaskPriority {
+    fn get_priority(&self) -> TaskPriority {
         self.priority.load()
     }
 
@@ -627,9 +633,9 @@ impl Task {
     ///
     /// Note: even if the task inherits priority from the given task, its
     /// intrinsic priority will still be kept and can be restored at any time.
-    pub(in super::super) fn ceil_priority_from(&self, other: &Self) {
-        let self_prio = self.priority.load();
-        let other_prio = other.priority.load();
+    fn ceil_priority_from(&self, other: &dyn TaskTrait) {
+        let self_prio = self.get_priority();
+        let other_prio = other.get_priority();
         if let Ok(inherited_prio) = TaskPriority::try_inherit_from(&self_prio, &other_prio) {
             self.priority.store(inherited_prio);
         }
@@ -637,23 +643,23 @@ impl Task {
 
     /// Set the priority of the task to its intrinsic value, i.e. the one given
     /// at task creation time.
-    pub(in super::super) fn restore_intrinsic_priority(&self) {
+    fn restore_intrinsic_priority(&self) {
         let intrinsic_prio = TaskPriority::restore_intrinsic(&self.priority.load());
         self.priority.store(intrinsic_prio);
     }
 
     /// Reduce the task's priority during unwinding, so that the unwinder will
     /// use the CPU idle time, unless any priority inversion occurs.
-    pub(in super::super) fn reduce_priority_for_unwind(&self) {
+    fn reduce_priority_for_unwind(&self) {
         self.priority
             .store(TaskPriority::new_intrinsic(config::UNWIND_PRIORITY))
     }
 
     /// Return true if and only if this task has higher priority than the other
     /// task.
-    pub(in super::super) fn should_preempt(&self, other: &Self) -> bool {
+    fn should_preempt(&self, other: &dyn TaskTrait) -> bool {
         if config::ALLOW_TASK_PREEMPTION {
-            self.priority.load() < other.priority.load()
+            self.get_priority() < other.get_priority()
         } else {
             false
         }
@@ -663,7 +669,7 @@ impl Task {
 // Create the adapter for the intrusive linked list of task structs.
 intrusive_adapter!(
     pub(in super::super) TaskListAdapter
-        = Arc<Task>: Task { linked_list_link: LinkedListAtomicLink }
+        = Arc<dyn TaskTrait>: Task { linked_list_link: LinkedListAtomicLink }
 );
 
 impl Drop for Task {

@@ -2,7 +2,7 @@ use super::super::{
     config,
     interrupt::svc,
     sync::{Access, AllowPendOp, Interruptable, RunPendedOp, Spin},
-    task::{Task, TaskCtxt, TaskListAdapter, TaskListInterfaces, TaskState},
+    task::{Task, TaskCtxt, TaskListAdapter, TaskListInterfaces, TaskState, TaskTrait},
     unrecoverable::Lethal,
 };
 use super::idle;
@@ -20,18 +20,18 @@ type ReadyQueue = Interruptable<Inner>;
 
 /// The inner content of a ready task queue.
 struct Inner {
-    /// The lock-free circular buffer holding `Arc<Task>`s which are not yet
-    /// linked into the ready linked list.
+    /// The lock-free circular buffer holding `Arc<dyn TaskTrait>`s which are
+    /// not yet linked into the ready linked list.
     insert_buffer: InsertBuffer,
     /// Ready tasks linked together as a linked list, allowing us to remove the
     /// one with the highest priority. This linked list is *not* sorted.
     ready_linked_list: Spin<LinkedList<TaskListAdapter>>,
 }
 
-/// A lock-free circular buffer holding `Arc<Task>`. When the ready queue is
-/// under contention, new ready tasks will be placed into this buffer and will
-/// be linked into the ready linked list at a later time.
-type InsertBuffer = MpMcQueue<Arc<Task>, { config::MAX_TASK_NUMBER }>;
+/// A lock-free circular buffer holding `Arc<dyn TaskTrait>`. When the ready
+/// queue is under contention, new ready tasks will be placed into this buffer
+/// and will be linked into the ready linked list at a later time.
+type InsertBuffer = MpMcQueue<Arc<dyn TaskTrait>, { config::MAX_TASK_NUMBER }>;
 
 impl Inner {
     const fn new() -> Self {
@@ -98,7 +98,7 @@ static EXIST_TASK_NUM: AtomicUsize = AtomicUsize::new(0);
 /// Make a new task ready. Return `Ok(())` if the new task is ready to be run
 /// by the scheduler, otherwise `Err(())` if the maximum number of tasks has been
 /// reached or the `id` is not acceptable.
-pub(super) fn make_new_task_ready(id: u8, task: Arc<Task>) -> Result<(), ()> {
+pub(super) fn make_new_task_ready(id: u8, task: Arc<dyn TaskTrait>) -> Result<(), ()> {
     // ID 0 is reserved for the idle task.
     if id == 0 {
         return Err(());
@@ -362,7 +362,7 @@ pub fn yield_for_preemption() {
     }
 }
 
-pub(in super::super) fn make_task_ready_and_enqueue(task: Arc<Task>) {
+pub(in super::super) fn make_task_ready_and_enqueue(task: Arc<dyn TaskTrait>) {
     READY_TASK_QUEUE.with_access(|access| match access {
         Access::Full { full_access } => super::with_current_task(|cur_task| {
             if task.should_preempt(cur_task) {
@@ -378,6 +378,6 @@ pub(in super::super) fn make_task_ready_and_enqueue(task: Arc<Task>) {
     })
 }
 
-pub(in super::super) fn set_task_state_block(task: &Task) {
+pub(in super::super) fn set_task_state_block(task: &dyn TaskTrait) {
     task.set_state(TaskState::Blocked);
 }

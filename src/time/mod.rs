@@ -123,7 +123,7 @@ pub fn sleep_ms(ms: u32) {
             .lock()
             .must_with_full_access(|full_access| {
                 schedule::with_current_task_arc(|cur_task| {
-                    schedule::set_task_state_block(&cur_task);
+                    schedule::set_task_state_block(cur_task.as_ref());
                     cur_task.set_wake_tick(wake_at_tick);
                     let mut locked_queue = full_access.time_sorted_queue.lock();
                     locked_queue.push_back_tick_sorted(cur_task);

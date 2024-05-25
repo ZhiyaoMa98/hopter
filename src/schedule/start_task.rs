@@ -1,4 +1,4 @@
-use super::super::task::Task;
+use super::super::task::{Task, TaskTrait};
 use super::scheduler;
 use alloc::sync::Arc;
 
@@ -56,7 +56,7 @@ where
 }
 
 /// Start a new task from a previously failed task.
-pub(in super::super) fn restart_from_task(prev_task: Arc<Task>) -> Result<(), ()> {
+pub(in super::super) fn restart_from_task(prev_task: Arc<dyn TaskTrait>) -> Result<(), ()> {
     let id = prev_task.get_id();
     let new_task = Task::build_restarted(prev_task)?;
 
