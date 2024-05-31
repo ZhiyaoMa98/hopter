@@ -9,6 +9,8 @@
 #![feature(unchecked_math)]
 #![feature(raw_ref_op)]
 #![feature(alloc_error_handler)]
+#![feature(offset_of)]
+#![feature(arbitrary_self_types)]
 
 extern crate alloc;
 

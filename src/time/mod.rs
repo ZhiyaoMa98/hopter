@@ -2,7 +2,7 @@ use super::{
     interrupt::svc,
     schedule,
     sync::{Access, AllowPendOp, Interruptable, RefCellSchedSafe, RunPendedOp, Spin},
-    task::{TaskListAdapter, TaskListInterfaces},
+    task::{TaskListAdapter, TaskListInterfaceExt},
 };
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use intrusive_collections::LinkedList;
@@ -15,7 +15,7 @@ struct Inner {
 impl Inner {
     const fn new() -> Self {
         Self {
-            time_sorted_queue: Spin::new(LinkedList::new(TaskListAdapter::NEW)),
+            time_sorted_queue: Spin::new(LinkedList::new(TaskListAdapter::new())),
             time_to_wakeup: AtomicBool::new(false),
         }
     }

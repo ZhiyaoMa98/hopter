@@ -1,9 +1,14 @@
-use super::super::sync::SpinGuard;
-use super::{priority::TaskPriority, HotSplitAlleviationBlock, TaskCtxt, TaskState};
+use super::{
+    priority::TaskPriority, FatLinked, HotSplitAlleviationBlock, TaskCtxt, TaskFatLink, TaskState,
+};
+use crate::sync::SpinGuard;
 use alloc::sync::Weak;
 use core::any::Any;
+use core::ptr::NonNull;
 
-pub(in super::super) trait TaskTrait: Any + Send + Sync {
+pub(crate) trait TaskTrait: FatLinked + Any + Send + Sync {
+    fn get_link(self: *const Self) -> NonNull<TaskFatLink>;
+
     fn as_any(&self) -> &dyn Any;
 
     fn get_sp(&mut self) -> u32;

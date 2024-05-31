@@ -2,7 +2,7 @@ use super::super::{
     config,
     interrupt::svc,
     sync::{Access, AllowPendOp, Interruptable, RunPendedOp, Spin},
-    task::{Task, TaskCtxt, TaskListAdapter, TaskListInterfaces, TaskState, TaskTrait},
+    task::{Task, TaskCtxt, TaskListAdapter, TaskListInterfaceExt, TaskState, TaskTrait},
     unrecoverable::Lethal,
 };
 use super::idle;
@@ -37,7 +37,7 @@ impl Inner {
     const fn new() -> Self {
         Self {
             insert_buffer: InsertBuffer::new(),
-            ready_linked_list: Spin::new(LinkedList::new(TaskListAdapter::NEW)),
+            ready_linked_list: Spin::new(LinkedList::new(TaskListAdapter::new())),
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::super::{
     interrupt::svc,
     schedule,
-    task::{TaskListAdapter, TaskListInterfaces},
+    task::{TaskListAdapter, TaskListInterfaceExt},
 };
 use super::{
     Access, AllowPendOp, Interruptable, Lockable, RefCellSchedSafe, RunPendedOp, Spin,
@@ -78,7 +78,7 @@ impl<'a> RunPendedOp for InnerFullAccessor<'a> {
 impl Inner {
     const fn new() -> Self {
         Self {
-            queue: Spin::new(LinkedList::new(TaskListAdapter::NEW)),
+            queue: Spin::new(LinkedList::new(TaskListAdapter::new())),
             notify_cnt: AtomicUsize::new(0),
         }
     }

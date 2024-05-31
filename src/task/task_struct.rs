@@ -1,14 +1,16 @@
-use super::super::{
+use super::{
+    priority::TaskPriority,
+    segmented_stack::{self, HotSplitAlleviationBlock},
+    task_list::TaskFatLink,
+    task_trait::TaskTrait,
+    trampoline::{self, EntryClosureArg, RestartableEntryFuncArg},
+    FatLinked,
+};
+use crate::{
     config,
     interrupt::{svc, trap_frame::TrapFrame},
     sync::{AtomicCell, Spin, SpinGuard},
     unrecoverable::{self, Lethal},
-};
-use super::{
-    priority::TaskPriority,
-    segmented_stack::{self, HotSplitAlleviationBlock},
-    task_trait::TaskTrait,
-    trampoline::{self, EntryClosureArg, RestartableEntryFuncArg},
 };
 use alloc::{
     boxed::Box,
@@ -17,9 +19,10 @@ use alloc::{
 use core::{
     alloc::Layout,
     any::Any,
+    mem::offset_of,
+    ptr::NonNull,
     sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU8, Ordering},
 };
-use intrusive_collections::{intrusive_adapter, LinkedListAtomicLink};
 use static_assertions::const_assert;
 
 #[repr(u8)]
@@ -156,7 +159,8 @@ pub(in super::super) struct Task {
     /// Invariant: a task struct can be inside at most one intrusive linked
     /// list. Trying to push a task which is already in a linked list into
     /// another linked list will result in a panic.
-    pub(super) linked_list_link: LinkedListAtomicLink,
+    // pub(super) linked_list_link: LinkedListAtomicLink,
+    pub(super) linked_list_link: TaskFatLink,
 }
 
 // Make sure the `AtomicCell`s used in `Task`'s fields are lock-free to prevent
@@ -291,7 +295,7 @@ impl Task {
                 config::TASK_PRIORITY_LEVELS - 1,
             )),
             restarted_from: None,
-            linked_list_link: LinkedListAtomicLink::new(),
+            linked_list_link: TaskFatLink::new::<Self>(),
             wake_at_tick: AtomicU32::new(u32::MAX),
         }
     }
@@ -552,7 +556,23 @@ impl Task {
     }
 }
 
+unsafe impl FatLinked for Task {
+    unsafe fn container_to_fat_link(self: *const Self) -> NonNull<TaskFatLink> {
+        let offset = offset_of!(Task, linked_list_link);
+        NonNull::new_unchecked(self.byte_add(offset).cast_mut().cast())
+    }
+
+    unsafe fn fat_link_to_container(ptr: NonNull<TaskFatLink>) -> *const dyn TaskTrait {
+        let offset = offset_of!(Task, linked_list_link);
+        ptr.as_ptr().byte_sub(offset).cast_const().cast::<Task>()
+    }
+}
+
 impl TaskTrait for Task {
+    fn get_link(self: *const Self) -> NonNull<TaskFatLink> {
+        unsafe { <Task as FatLinked>::container_to_fat_link(self) }
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -665,12 +685,6 @@ impl TaskTrait for Task {
         }
     }
 }
-
-// Create the adapter for the intrusive linked list of task structs.
-intrusive_adapter!(
-    pub(in super::super) TaskListAdapter
-        = Arc<dyn TaskTrait>: Task { linked_list_link: LinkedListAtomicLink }
-);
 
 impl Drop for Task {
     /// When dropping a task struct, we should free the initial stacklet.
