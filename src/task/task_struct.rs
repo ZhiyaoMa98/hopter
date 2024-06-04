@@ -9,7 +9,7 @@ use super::{
 use crate::{
     config,
     interrupt::{svc, trap_frame::TrapFrame},
-    sync::{AtomicCell, Spin, SpinGuard},
+    sync::{AtomicCell, Spin},
     unrecoverable::{self, Lethal},
 };
 use alloc::{
@@ -145,7 +145,7 @@ pub(in super::super) struct Task {
     /*** Fields for segmented stack hot-split alleviation. ***/
     /// The recorded information used to alleviate the hot-split problem of
     /// segmented stacks.
-    hsab: Spin<HotSplitAlleviationBlock>,
+    pub(super) hsab: Spin<HotSplitAlleviationBlock>,
 
     /*** Fields for priority scheduling and sleeping. ***/
     /// See [`TaskPriority`].
@@ -636,11 +636,6 @@ impl TaskTrait for Task {
     /// of the context.
     unsafe fn force_unlock_ctxt(&self) {
         self.ctxt.force_unlock()
-    }
-
-    /// Return the lock guard for accessing the hot-split alleviation block.
-    fn lock_hsab(&self) -> SpinGuard<HotSplitAlleviationBlock> {
-        self.hsab.lock()
     }
 
     /// Get the priority of this task.

@@ -1,12 +1,10 @@
-use super::{
-    priority::TaskPriority, FatLinked, HotSplitAlleviationBlock, TaskCtxt, TaskFatLink, TaskState,
-};
-use crate::sync::SpinGuard;
+use super::{priority::TaskPriority, FatLinked, TaskCtxt, TaskFatLink, TaskState};
+use crate::interrupt::{trap_frame::TrapFrame, TaskSVCCtxt};
 use alloc::sync::Weak;
 use core::any::Any;
 use core::ptr::NonNull;
 
-pub(crate) trait TaskTrait: FatLinked + Any + Send + Sync {
+pub(crate) trait TaskTrait: FatLinked + SegStkSupport + Any + Send + Sync {
     fn get_link(self: *const Self) -> NonNull<TaskFatLink>;
 
     fn as_any(&self) -> &dyn Any;
@@ -43,9 +41,6 @@ pub(crate) trait TaskTrait: FatLinked + Any + Send + Sync {
     /// of the context.
     unsafe fn force_unlock_ctxt(&self);
 
-    /// Return the lock guard for accessing the hot-split alleviation block.
-    fn lock_hsab(&self) -> SpinGuard<HotSplitAlleviationBlock>;
-
     /// Get the priority of this task.
     fn get_priority(&self) -> TaskPriority;
 
@@ -67,4 +62,9 @@ pub(crate) trait TaskTrait: FatLinked + Any + Send + Sync {
     /// Return true if and only if this task has higher priority than the other
     /// task.
     fn should_preempt(&self, other: &dyn TaskTrait) -> bool;
+}
+
+pub(crate) trait SegStkSupport {
+    fn more_stack(&self, tf: &mut TrapFrame, ctxt: &mut TaskSVCCtxt);
+    fn less_stack(&self, tf: &TrapFrame, ctxt: &mut TaskSVCCtxt);
 }

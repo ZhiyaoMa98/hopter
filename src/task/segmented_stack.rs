@@ -52,7 +52,7 @@
 //! [`unwind_land`] handles the corner case when the unwinder invokes a landing
 //! pad.
 
-use super::super::{
+use crate::{
     config,
     interrupt::{
         svc,
@@ -68,6 +68,8 @@ use core::{
     arch::asm,
     sync::atomic::{AtomicUsize, Ordering},
 };
+
+use super::{SegStkSupport, Task};
 
 #[no_mangle]
 static STACK_EXTEND_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -88,15 +90,15 @@ pub fn get_active_stacklet_count() -> usize {
 /// together to form a logical function call stack.
 #[repr(C)]
 #[derive(Clone, Default)]
-pub(in super::super) struct StackletMeta {
+pub(crate) struct StackletMeta {
     /// The boundary address of the previous stacklet.
-    pub(in super::super) prev_stklet_bound: u32,
+    pub(crate) prev_stklet_bound: u32,
     /// The final stack pointer address pointing into the previous stacklet
     /// before switching to the next stacklet.
-    pub(in super::super) prev_sp: u32,
+    pub(crate) prev_sp: u32,
     /// How many times a new stacklet was allocated when running with the
     /// current stacklet.
-    pub(in super::super) extend_cnt: u32,
+    pub(crate) extend_cnt: u32,
 }
 
 /// Calculate the overhead size according to the stacklet layout. See the
@@ -114,18 +116,18 @@ const STACKLET_METADATA_BOUNDARY_OFFSET: usize = OVERHEAD_SIZE;
 
 /// Given the boundary address of a stacklet, return the `*mut u8` pointer to
 /// the stacklet.
-pub(in super::super) fn bound_to_stklet_ptr(bound: usize) -> *mut u8 {
+pub(crate) fn bound_to_stklet_ptr(bound: usize) -> *mut u8 {
     (bound - STACKLET_METADATA_BOUNDARY_OFFSET) as *mut u8
 }
 
 /// Given the boundary address of a stacklet, return the raw pointer pointing
 /// to the stacklet metadata.
-pub(in super::super) fn bound_to_stklet_meta(bound: usize) -> *mut StackletMeta {
+pub(crate) fn bound_to_stklet_meta(bound: usize) -> *mut StackletMeta {
     (bound - STACKLET_METADATA_BOUNDARY_OFFSET) as *mut StackletMeta
 }
 
 /// Given the raw pointer to a stacklet, return the boundary address.
-pub(in super::super) fn stklet_ptr_to_bound(ptr: *mut u8) -> usize {
+pub(crate) fn stklet_ptr_to_bound(ptr: *mut u8) -> usize {
     (ptr as usize) + STACKLET_METADATA_BOUNDARY_OFFSET
 }
 
@@ -169,188 +171,14 @@ pub(super) fn alloc_initial_stacklet(free_size: usize) -> (*mut u8, *mut u8) {
     unsafe { (stklet_ptr, stklet_ptr.add(total_size)) }
 }
 
-/// Allocate a new stacklet for the currently running task. Let the task's current
-/// function continue with the new stacklet to execute its function body.
-pub(in super::super) fn more_stack(tf: &mut TrapFrame, ctxt: &mut TaskSVCCtxt) {
-    // The compiler generates the following function prologue:
-    //
-    //   00: f04f 5c00 mov.w  r12, #0x20000000 ; take stacklet boundary address
-    //   04: f8dc c000 ldr.w  r12, [r12]       ; read stacklet boundary
-    //   08: ebbd 0c0c subs.w r12, sp, r12     ; calculate remaining free size
-    //   0c: f1bc 0f18 cmp.w  r12, #24         ; compare with requested size
-    //   10: da02      bge.n  func_body        ; if enough free space, goto func_body
-    //   12: dfff      svc    #255             ; otherwise, invoke SVC
-    //   14: xxxx      .short function_stack_size (right shifted by 2) ; <- preserved PC
-    //   16: xxxx      .short function_arg_size (right shifted by 2)   ; <- PC + 2
-    // func_body:                                                      ;
-    //   18: ...                                                       ; <- PC + 4
-    //
-    // The two `.short` constants are the parameters to allocate new stacklet.
-    // Since the stack frame size and argument size are always multiples of 4,
-    // the constant stored are right shifted by 4, so that we can represent a
-    // larger range with 16 bits.
-
-    // Get the stack frame size according to the layout above.
-    fn get_stack_frame_size(tf: &TrapFrame) -> u32 {
-        let task_pc = tf.gp_regs.pc;
-        let half_word_ptr = task_pc as *const u16;
-        let half_word = unsafe { core::ptr::read_volatile(half_word_ptr) };
-        (half_word as u32) * 4
-    }
-
-    // Get the stack argument size according to the layout above.
-    fn get_stack_arg_size(tf: &TrapFrame) -> u32 {
-        let task_pc = tf.gp_regs.pc;
-        let half_word_ptr = (task_pc + 2) as *const u16;
-        let half_word = unsafe { core::ptr::read_volatile(half_word_ptr) };
-        (half_word as u32) * 4
-    }
-
-    STACK_EXTEND_COUNT.fetch_add(1, Ordering::Relaxed);
-
-    let mut stk_frame_size = get_stack_frame_size(tf);
-    let stk_arg_size = get_stack_arg_size(tf);
-
-    // The current stacklet boundary.
-    let bound = ctxt.stklet_bound;
-
-    // Retrieve the current stacklet metadata.
-    let cur_meta_ptr = bound_to_stklet_meta(bound as usize);
-    let cur_meta = unsafe { &mut *cur_meta_ptr };
-
-    // Alleviate the hot split problem.
-    schedule::with_current_task(|cur_task| {
-        let mut locked_hsab = cur_task.lock_hsab();
-        svc_more_stack_anti_hot_split(
-            tf,
-            &mut stk_frame_size,
-            &mut *locked_hsab,
-            &mut cur_meta.extend_cnt,
-        );
-    });
-
-    // Total chunk size to request from malloc.
-    // The overhead includes the trap frame, its padding, and the metadata block.
-    let total_size = stk_frame_size as usize
-        + stk_arg_size as usize
-        + OVERHEAD_SIZE
-        + config::STKLET_ADDITION_ALLOC_SIZE;
-
-    unsafe {
-        // Pointer to the new stacklet.
-        let stacklet_ptr =
-            alloc::alloc::alloc(Layout::from_size_align(total_size, 4).unwrap_or_die());
-
-        // Currently, it is an unrecoverable error if the allocation fails.
-        unrecoverable::die_if(|| stacklet_ptr.is_null());
-
-        // The metadata is placed at the lowest address inside the chunk.
-        let meta_ptr = stacklet_ptr as *mut StackletMeta;
-        meta_ptr.write(StackletMeta {
-            prev_stklet_bound: ctxt.stklet_bound,
-            prev_sp: ctxt.sp,
-            extend_cnt: 0,
-        });
-
-        // Below shows the layout of the previous stacklet:
-        //
-        // |            ... ...            |
-        // |   Caller's Func Stack Frame   |
-        // +-------------------------------+
-        // |  Stack Arguments for Callee   |
-        // +-------------------------------+
-        // | Trap Frame (104 or 108 bytes) |
-        // +-------------------------------+ <- prev_sp points here
-
-        // Calculate the trap frame size. The 9th bit in `xPSR` indicates if
-        // the trap frame contains a padding.
-        let mut tf_size = core::mem::size_of::<TrapFrame>();
-        if (tf.gp_regs.xpsr & (1 << 9)) != 0 {
-            tf_size += TRAP_FRAME_PAD_SIZE;
-        }
-
-        // Pointer to the stack passed arguments inside the new stacklet.
-        let dst_arg_ptr = stacklet_ptr.offset((total_size - stk_arg_size as usize) as isize);
-
-        // Pointer to the stack passed arguments inside the previous stacklet.
-        let src_arg_ptr = (ctxt.sp as usize + tf_size) as *const u8;
-
-        // Copy the stack passed arguments.
-        core::ptr::copy_nonoverlapping(src_arg_ptr, dst_arg_ptr, stk_arg_size as usize);
-
-        // Pointer to the trap frame inside the new stacklet. This trap frame
-        // will be used to exception return to the task's function body.
-        let new_tf_ptr = dst_arg_ptr.offset(-(TRAP_FRAME_SIZE as isize));
-
-        // Copy the trap frame from the previous stacklet to the new one.
-        let new_tf = &mut *(new_tf_ptr as *mut TrapFrame);
-        *new_tf = tf.clone();
-
-        // Since we did not add padding for the trap frame in the new stacklet,
-        // clear the 9th bit so that the hardware will assume there is no padding.
-        new_tf.gp_regs.xpsr &= !(1 << 9);
-
-        // Calculate the stacklet boundary of the new stacklet.
-        let new_bound = stacklet_ptr as usize + OVERHEAD_SIZE;
-
-        // Update the stacklet boundary and stack pointer for the current task.
-        ctxt.stklet_bound = new_bound as u32;
-        ctxt.sp = new_tf_ptr as u32;
-
-        // We should resume execution from the function body. See the instruction
-        // layout above for `+4`.
-        new_tf.gp_regs.pc = tf.gp_regs.pc + 4;
-
-        // Set the return address so that when the function returns
-        // we can take over the control to release the stacklet.
-        new_tf.gp_regs.lr = svc::svc_less_stack as u32;
-    }
-
-    ACTIVE_STACKLET_COUNT.fetch_add(1, Ordering::Relaxed);
+pub(crate) fn more_stack(tf: &mut TrapFrame, ctxt: &mut TaskSVCCtxt) {
+    // more_stack_impl(tf, ctxt)
+    schedule::with_current_task(|cur_task| cur_task.more_stack(tf, ctxt))
 }
 
-/// Free the current stacklet of the currently running task. Let the task return to the
-/// function running with the previous stacklet.
-pub(in super::super) fn less_stack(tf: &TrapFrame, ctxt: &mut TaskSVCCtxt) {
-    // The current stacklet boundary.
-    let bound = ctxt.stklet_bound;
-
-    unsafe {
-        // Retrieve the previous stacklet information.
-        let meta_ptr = bound_to_stklet_meta(bound as usize);
-        let meta = &*meta_ptr;
-
-        // Trap frame in the previous stacklet is on the stacklet top.
-        let prev_tf = &mut *(meta.prev_sp as *mut TrapFrame);
-
-        // Copy the return values to the previous trap frame.
-        prev_tf.gp_regs.r0 = tf.gp_regs.r0;
-        prev_tf.gp_regs.r1 = tf.gp_regs.r1;
-        prev_tf.gp_regs.r2 = tf.gp_regs.r2;
-        prev_tf.gp_regs.r3 = tf.gp_regs.r3;
-
-        // Will resume execution from the returning address.
-        prev_tf.gp_regs.pc = prev_tf.gp_regs.lr;
-
-        // Restore the stacklet boundary and stack pointer to the previous stacklet.
-        ctxt.stklet_bound = meta.prev_stklet_bound;
-        ctxt.sp = meta.prev_sp;
-
-        // Update hot split alleviation information.
-        schedule::with_current_task(|cur_task| {
-            let mut locked_hsab = cur_task.lock_hsab();
-            svc_less_stack_anti_hot_split(prev_tf, &mut *locked_hsab);
-        });
-
-        // The stacklet starts with the metadata.
-        let stacklet_ptr = meta_ptr as *mut u8;
-
-        // Free the current stacklet.
-        // Layout is not used in the current dealloc implementation.
-        alloc::alloc::dealloc(stacklet_ptr, Layout::new::<u8>());
-    }
-
-    ACTIVE_STACKLET_COUNT.fetch_sub(1, Ordering::Relaxed);
+pub(crate) fn less_stack(tf: &TrapFrame, ctxt: &mut TaskSVCCtxt) {
+    // less_stack_impl(tf, ctxt)
+    schedule::with_current_task(|cur_task| cur_task.less_stack(tf, ctxt))
 }
 
 /// Let the task being unwound execute the landing pad.
@@ -414,10 +242,193 @@ pub fn unwind_land(tf: &TrapFrame, ctxt: &mut TaskSVCCtxt) {
     }
 }
 
+impl SegStkSupport for Task {
+    /// Allocate a new stacklet for the currently running task. Let the task's current
+    /// function continue with the new stacklet to execute its function body.
+    fn more_stack(&self, tf: &mut TrapFrame, ctxt: &mut TaskSVCCtxt) {
+        // The compiler generates the following function prologue:
+        //
+        //   00: f04f 5c00 mov.w  r12, #0x20000000 ; take stacklet boundary address
+        //   04: f8dc c000 ldr.w  r12, [r12]       ; read stacklet boundary
+        //   08: ebbd 0c0c subs.w r12, sp, r12     ; calculate remaining free size
+        //   0c: f1bc 0f18 cmp.w  r12, #24         ; compare with requested size
+        //   10: da02      bge.n  func_body        ; if enough free space, goto func_body
+        //   12: dfff      svc    #255             ; otherwise, invoke SVC
+        //   14: xxxx      .short function_stack_size (right shifted by 2) ; <- preserved PC
+        //   16: xxxx      .short function_arg_size (right shifted by 2)   ; <- PC + 2
+        // func_body:                                                      ;
+        //   18: ...                                                       ; <- PC + 4
+        //
+        // The two `.short` constants are the parameters to allocate new stacklet.
+        // Since the stack frame size and argument size are always multiples of 4,
+        // the constant stored are right shifted by 4, so that we can represent a
+        // larger range with 16 bits.
+
+        // Get the stack frame size according to the layout above.
+        fn get_stack_frame_size(tf: &TrapFrame) -> u32 {
+            let task_pc = tf.gp_regs.pc;
+            let half_word_ptr = task_pc as *const u16;
+            let half_word = unsafe { core::ptr::read_volatile(half_word_ptr) };
+            (half_word as u32) * 4
+        }
+
+        // Get the stack argument size according to the layout above.
+        fn get_stack_arg_size(tf: &TrapFrame) -> u32 {
+            let task_pc = tf.gp_regs.pc;
+            let half_word_ptr = (task_pc + 2) as *const u16;
+            let half_word = unsafe { core::ptr::read_volatile(half_word_ptr) };
+            (half_word as u32) * 4
+        }
+
+        STACK_EXTEND_COUNT.fetch_add(1, Ordering::Relaxed);
+
+        let mut stk_frame_size = get_stack_frame_size(tf);
+        let stk_arg_size = get_stack_arg_size(tf);
+
+        // The current stacklet boundary.
+        let bound = ctxt.stklet_bound;
+
+        // Retrieve the current stacklet metadata.
+        let cur_meta_ptr = bound_to_stklet_meta(bound as usize);
+        let cur_meta = unsafe { &mut *cur_meta_ptr };
+
+        // Alleviate the hot split problem.
+        let mut locked_hsab = self.hsab.lock();
+        svc_more_stack_anti_hot_split(
+            tf,
+            &mut stk_frame_size,
+            &mut *locked_hsab,
+            &mut cur_meta.extend_cnt,
+        );
+
+        // Total chunk size to request from malloc.
+        // The overhead includes the trap frame, its padding, and the metadata block.
+        let total_size = stk_frame_size as usize
+            + stk_arg_size as usize
+            + OVERHEAD_SIZE
+            + config::STKLET_ADDITION_ALLOC_SIZE;
+
+        unsafe {
+            // Pointer to the new stacklet.
+            let stacklet_ptr =
+                alloc::alloc::alloc(Layout::from_size_align(total_size, 4).unwrap_or_die());
+
+            // Currently, it is an unrecoverable error if the allocation fails.
+            unrecoverable::die_if(|| stacklet_ptr.is_null());
+
+            // The metadata is placed at the lowest address inside the chunk.
+            let meta_ptr = stacklet_ptr as *mut StackletMeta;
+            meta_ptr.write(StackletMeta {
+                prev_stklet_bound: ctxt.stklet_bound,
+                prev_sp: ctxt.sp,
+                extend_cnt: 0,
+            });
+
+            // Below shows the layout of the previous stacklet:
+            //
+            // |            ... ...            |
+            // |   Caller's Func Stack Frame   |
+            // +-------------------------------+
+            // |  Stack Arguments for Callee   |
+            // +-------------------------------+
+            // | Trap Frame (104 or 108 bytes) |
+            // +-------------------------------+ <- prev_sp points here
+
+            // Calculate the trap frame size. The 9th bit in `xPSR` indicates if
+            // the trap frame contains a padding.
+            let mut tf_size = core::mem::size_of::<TrapFrame>();
+            if (tf.gp_regs.xpsr & (1 << 9)) != 0 {
+                tf_size += TRAP_FRAME_PAD_SIZE;
+            }
+
+            // Pointer to the stack passed arguments inside the new stacklet.
+            let dst_arg_ptr = stacklet_ptr.offset((total_size - stk_arg_size as usize) as isize);
+
+            // Pointer to the stack passed arguments inside the previous stacklet.
+            let src_arg_ptr = (ctxt.sp as usize + tf_size) as *const u8;
+
+            // Copy the stack passed arguments.
+            core::ptr::copy_nonoverlapping(src_arg_ptr, dst_arg_ptr, stk_arg_size as usize);
+
+            // Pointer to the trap frame inside the new stacklet. This trap frame
+            // will be used to exception return to the task's function body.
+            let new_tf_ptr = dst_arg_ptr.offset(-(TRAP_FRAME_SIZE as isize));
+
+            // Copy the trap frame from the previous stacklet to the new one.
+            let new_tf = &mut *(new_tf_ptr as *mut TrapFrame);
+            *new_tf = tf.clone();
+
+            // Since we did not add padding for the trap frame in the new stacklet,
+            // clear the 9th bit so that the hardware will assume there is no padding.
+            new_tf.gp_regs.xpsr &= !(1 << 9);
+
+            // Calculate the stacklet boundary of the new stacklet.
+            let new_bound = stacklet_ptr as usize + OVERHEAD_SIZE;
+
+            // Update the stacklet boundary and stack pointer for the current task.
+            ctxt.stklet_bound = new_bound as u32;
+            ctxt.sp = new_tf_ptr as u32;
+
+            // We should resume execution from the function body. See the instruction
+            // layout above for `+4`.
+            new_tf.gp_regs.pc = tf.gp_regs.pc + 4;
+
+            // Set the return address so that when the function returns
+            // we can take over the control to release the stacklet.
+            new_tf.gp_regs.lr = svc::svc_less_stack as u32;
+        }
+
+        ACTIVE_STACKLET_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Free the current stacklet of the currently running task. Let the task return to the
+    /// function running with the previous stacklet.
+    fn less_stack(&self, tf: &TrapFrame, ctxt: &mut TaskSVCCtxt) {
+        // The current stacklet boundary.
+        let bound = ctxt.stklet_bound;
+
+        unsafe {
+            // Retrieve the previous stacklet information.
+            let meta_ptr = bound_to_stklet_meta(bound as usize);
+            let meta = &*meta_ptr;
+
+            // Trap frame in the previous stacklet is on the stacklet top.
+            let prev_tf = &mut *(meta.prev_sp as *mut TrapFrame);
+
+            // Copy the return values to the previous trap frame.
+            prev_tf.gp_regs.r0 = tf.gp_regs.r0;
+            prev_tf.gp_regs.r1 = tf.gp_regs.r1;
+            prev_tf.gp_regs.r2 = tf.gp_regs.r2;
+            prev_tf.gp_regs.r3 = tf.gp_regs.r3;
+
+            // Will resume execution from the returning address.
+            prev_tf.gp_regs.pc = prev_tf.gp_regs.lr;
+
+            // Restore the stacklet boundary and stack pointer to the previous stacklet.
+            ctxt.stklet_bound = meta.prev_stklet_bound;
+            ctxt.sp = meta.prev_sp;
+
+            // Update hot split alleviation information.
+
+            let mut locked_hsab = self.hsab.lock();
+            svc_less_stack_anti_hot_split(prev_tf, &mut *locked_hsab);
+
+            // The stacklet starts with the metadata.
+            let stacklet_ptr = meta_ptr as *mut u8;
+
+            // Free the current stacklet.
+            // Layout is not used in the current dealloc implementation.
+            alloc::alloc::dealloc(stacklet_ptr, Layout::new::<u8>());
+        }
+
+        ACTIVE_STACKLET_COUNT.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 const HOT_SPLIT_PREVENTION_CACHE_SIZE: usize = 4;
 
 #[derive(Default)]
-pub(in super::super) struct HotSplitAlleviationBlock {
+pub(super) struct HotSplitAlleviationBlock {
     call_chain_signature: u32,
     hot_split_cause_signatures: [u32; HOT_SPLIT_PREVENTION_CACHE_SIZE],
     add_sizes: [u32; HOT_SPLIT_PREVENTION_CACHE_SIZE],
