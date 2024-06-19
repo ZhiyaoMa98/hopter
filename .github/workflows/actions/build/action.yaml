@@ -27,3 +27,13 @@ runs:
         with:
           name: hello_world
           path: ./target/thumbv7em-none-eabihf/release/examples/hello_world
+
+      - name: Build test sleep
+        run: cargo +segstk-rust build --release --example sleep
+        shell: bash
+
+      - name: Upload test sleep
+        uses: actions/upload-artifact@v4
+        with:
+          name: sleep
+          path: ./target/thumbv7em-none-eabihf/release/examples/sleep
