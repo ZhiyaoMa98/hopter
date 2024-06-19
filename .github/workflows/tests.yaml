@@ -21,7 +21,7 @@ jobs:
         shell: bash
 
       - name: Run test "hello world"
-        uses: ./.github/workflows/actions/test-run
+        uses: ./.github/workflows/actions/run-test
         with:
           cookie: ${{ inputs.cookie }}
           test-name: hello world
@@ -44,7 +44,7 @@ jobs:
         shell: bash
 
       - name: Run test sleep
-        uses: ./.github/workflows/actions/test-run
+        uses: ./.github/workflows/actions/run-test
         with:
           cookie: ${{ inputs.cookie }}
           test-name: sleep

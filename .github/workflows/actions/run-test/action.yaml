@@ -27,7 +27,7 @@ runs:
         with:
           cookie: ${{ inputs.cookie }}
 
-      - name: Download test ${{ inputs.test-name }}
+      - name: Download ELF image for ${{ inputs.test-name }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.test-image-key }}
