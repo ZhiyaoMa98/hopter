@@ -9,30 +9,34 @@ inputs:
 runs:
   using: "composite"
   steps:
-      - name: Prepare QEMU
-        uses: ./.github/workflows/actions/prepare-qemu
-        with:
-          cookie: ${{ inputs.cookie }}
+      # - name: Prepare QEMU
+      #   uses: ./.github/workflows/actions/prepare-qemu
+      #   with:
+      #     cookie: ${{ inputs.cookie }}
 
-      - name: Download test "hello world"
-        uses: actions/download-artifact@v4
-        with:
-          name: hello_world
-          path: ./artifacts
+      # - name: Download test "hello world"
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: hello_world
+      #     path: ./artifacts
 
-      - name: Run test "hello world"
-        run: |
-          timeout 5s \
-            qemu-system-arm -machine netduinoplus2 -nographic \
-            -semihosting-config enable=on,target=native \
-            -kernel ./artifacts/hello_world \
-            > output.txt
-        shell: bash
+      # - name: Run test "hello world"
+      #   run: |
+      #     timeout 5s \
+      #       qemu-system-arm -machine netduinoplus2 -nographic \
+      #       -semihosting-config enable=on,target=native \
+      #       -kernel ./artifacts/hello_world \
+      #       > output.txt
+      #   shell: bash
 
       - name: Emit ground truth output
         run: echo "hello world!" > truth.txt
         shell: bash
-      
-      - name: Check test output
-        run: diff output.txt truth.txt
-        shell: bash
+
+      - name: Run test "hello world"
+        uses: ./.github/workflows/actions/test-run
+        with:
+          cookie: ${{ inputs.cookie }}
+          test-name: hello world
+          test-image-key: hello_world
+          output-ground-truth: truth.txt

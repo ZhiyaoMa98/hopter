@@ -1,0 +1,47 @@
+name: Run ELF Image for Testing
+description: "Run the given ELF image with QEMU and compare the output with ground truth."
+
+inputs:
+  cookie:
+    description: "Cookie for download authorization."
+    required: true
+  test-name:
+    description: "Name of the test to be run."
+    required: true
+  test-image-key:
+    description: "The artifact key for the ELF image to be tested."
+    required: true
+  output-ground-truth:
+    description: "The correct answer for output."
+    required: true
+  timeout:
+    description: "Timeout to prevent unresponsive QEMU."
+    required: false
+    default: 5s
+
+runs:
+  using: "composite"
+  steps:
+      - name: Prepare QEMU
+        uses: ./.github/workflows/actions/prepare-qemu
+        with:
+          cookie: ${{ inputs.cookie }}
+
+      - name: Download test ${{ inputs.test-name }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.test-image-key }}
+          path: ./artifacts
+
+      - name: Run test ${{ inputs.test-name }}
+        run: |
+          timeout ${{ inputs.timeout }} \
+            qemu-system-arm -machine netduinoplus2 -nographic \
+            -semihosting-config enable=on,target=native \
+            -kernel "./artifacts/${{ inputs.test-image-key }}" \
+            > output.txt
+        shell: bash
+      
+      - name: Check test output
+        run: diff output.txt "${{ inputs.output-ground-truth }}"
+        shell: bash
