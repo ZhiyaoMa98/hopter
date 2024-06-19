@@ -48,8 +48,8 @@ jobs:
         with:
           cookie: ${{ secrets.AUTHORIZED_DOWNLOAD_COOKIE }}
     
-  test-hello-world:
+  test:
     needs: [build]
     uses: ./.github/workflows/tests.yaml
-    with:
+    secrets:
       cookie: ${{ secrets.AUTHORIZED_DOWNLOAD_COOKIE }}
