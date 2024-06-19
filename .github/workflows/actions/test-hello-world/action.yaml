@@ -21,7 +21,12 @@ runs:
           path: ./artifacts
 
       - name: Run test "hello world"
-        run: qemu-system-arm -machine netduinoplus2 -nographic -semihosting-config enable=on,target=native -kernel ./artifacts/hello_world > output.txt
+        run: |
+          timeout 5s \
+            qemu-system-arm -machine netduinoplus2 -nographic \
+            -semihosting-config enable=on,target=native \
+            -kernel ./artifacts/hello_world \
+            > output.txt
         shell: bash
 
       - name: Emit ground truth output
