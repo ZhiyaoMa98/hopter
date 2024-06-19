@@ -1,14 +1,21 @@
-name: Run Hello World Test
-description: "Run hello world test."
+name: All Test Cases
 
-inputs:
-  cookie:
-    description: "Cookie for download authorization."
-    required: true
+on:
+  workflow_call:
+    secrets:
+      cookie:
+        required: true
 
-runs:
-  using: "composite"
-  steps:
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  hello-world:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Emit ground truth output
         run: echo "hello world!" > truth.txt
         shell: bash

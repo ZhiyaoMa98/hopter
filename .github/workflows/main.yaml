@@ -49,13 +49,7 @@ jobs:
           cookie: ${{ secrets.AUTHORIZED_DOWNLOAD_COOKIE }}
     
   test-hello-world:
-    runs-on: ubuntu-latest
     needs: [build]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run test "hello world"
-        uses: ./.github/workflows/actions/test-hello-world
-        with:
-          cookie: ${{ secrets.AUTHORIZED_DOWNLOAD_COOKIE }}
+    uses: ./.github/workflows/tests.yaml
+    with:
+      cookie: ${{ secrets.AUTHORIZED_DOWNLOAD_COOKIE }}
