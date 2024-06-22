@@ -41,6 +41,10 @@ runs:
             -kernel "./artifacts/${{ inputs.test-image-key }}" \
             > output.txt
         shell: bash
+
+      - name: Print output
+        run: cat output.txt
+        shell: bash
       
       - name: Check test output
         run: diff output.txt "${{ inputs.output-ground-truth }}"
