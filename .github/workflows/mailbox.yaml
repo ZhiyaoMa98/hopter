@@ -41,12 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Emit ground truth output
-        run: |
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
+        run: echo > truth.txt
         shell: bash
 
       - name: Run test notify_in_advance
@@ -65,12 +60,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Emit ground truth output
-        run: |
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
+        run: echo > truth.txt
         shell: bash
 
       - name: Run test task_not_timeout
@@ -89,12 +79,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Emit ground truth output
-        run: |
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
-          echo "received" >> truth.txt
+        run: echo > truth.txt
         shell: bash
 
       - name: Run test task_timeout
