@@ -23,7 +23,7 @@ jobs:
       - name: Run test "hello world"
         uses: ./.github/workflows/actions/run-test
         with:
-          cookie: ${{ inputs.cookie }}
+          cookie: ${{ secrets.cookie }}
           test-name: hello world
           test-image-key: hello_world
           output-ground-truth: truth.txt
@@ -46,8 +46,13 @@ jobs:
       - name: Run test sleep
         uses: ./.github/workflows/actions/run-test
         with:
-          cookie: ${{ inputs.cookie }}
+          cookie: ${{ secrets.cookie }}
           test-name: sleep
           test-image-key: sleep
           output-ground-truth: truth.txt
           timeout: 10s
+
+  sync:
+    uses: ./.github/workflows/tests/sync.yaml
+    secrets:
+      cookie: ${{ secrets.cookie }}

@@ -57,3 +57,19 @@ git = "https://github.com/ZhiyaoMa98/stm32f4xx-hal.git"
 branch = "dependency"
 default-features = false
 features = ["stm32f405"]
+
+[[example]]
+name = "test-sync-mailbox-notify_by_task"
+path = "examples/tests/sync/mailbox/notify_by_task.rs"
+
+[[example]]
+name = "test-sync-mailbox-notify_in_advance"
+path = "examples/tests/sync/mailbox/notify_in_advance.rs"
+
+[[example]]
+name = "test-sync-mailbox-task_timeout"
+path = "examples/tests/sync/mailbox/task_timeout.rs"
+
+[[example]]
+name = "test-sync-mailbox-task_not_timeout"
+path = "examples/tests/sync/mailbox/task_not_timeout.rs"

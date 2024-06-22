@@ -2,9 +2,10 @@ use crate::{
     interrupt::svc,
     schedule,
     sync::{Access, AllowPendOp, Interruptable, RefCellSchedSafe, RunPendedOp, Spin},
-    task::{TaskListAdapter, TaskListInterfaces},
+    task::{Task, TaskListAdapter, TaskListInterfaces},
     unrecoverable::Lethal,
 };
+use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use intrusive_collections::LinkedList;
 
@@ -109,6 +110,7 @@ pub fn sleep_ms(ms: u32) {
     let wake_at_tick = get_tick() + ms;
 
     // Using while loop to prevent spurious wakeup.
+    // FIXME: while loop not necessary any more.
     while get_tick() < wake_at_tick {
         add_cur_task_to_sleep_queue(wake_at_tick);
 
@@ -120,17 +122,30 @@ pub fn sleep_ms(ms: u32) {
     // Outline the logic to reduce the stack frame size of `sleep_ms`.
     #[inline(never)]
     fn add_cur_task_to_sleep_queue(wake_at_tick: u32) {
-        SLEEP_TASK_QUEUE
-            .lock()
-            .must_with_full_access(|full_access| {
-                schedule::with_current_task_arc(|cur_task| {
-                    schedule::set_task_state_block(&cur_task);
-                    cur_task.set_wake_tick(wake_at_tick);
-                    let mut locked_queue = full_access.time_sorted_queue.lock_now_or_die();
-                    locked_queue.push_back_tick_sorted(cur_task);
-                });
-            });
+        schedule::with_current_task_arc(|cur_task| {
+            schedule::set_task_state_block(&cur_task);
+            add_task_to_sleep_queue(cur_task, wake_at_tick);
+        })
     }
+}
+
+pub(crate) fn add_task_to_sleep_queue(task: Arc<Task>, wake_at_tick: u32) {
+    SLEEP_TASK_QUEUE
+        .lock()
+        .must_with_full_access(|full_access| {
+            task.set_wake_tick(wake_at_tick);
+            let mut locked_queue = full_access.time_sorted_queue.lock_now_or_die();
+            locked_queue.push_back_tick_sorted(task);
+        });
+}
+
+pub(crate) fn remove_task_from_sleep_queue(task: &Task) -> bool {
+    SLEEP_TASK_QUEUE
+        .lock()
+        .must_with_full_access(|full_access| {
+            let mut locked_queue = full_access.time_sorted_queue.lock_now_or_die();
+            locked_queue.remove_task(task)
+        })
 }
 
 /// A time-based task barrier that allow a task to proceed at a given interval.

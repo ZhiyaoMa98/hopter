@@ -1,0 +1,16 @@
+name: Run Tests for Mailbox
+
+on:
+  workflow_call:
+    secrets:
+      cookie:
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mailbox:
+    uses: ./.github/workflows/tests/sync/mailbox.yaml
+    secrets:
+      cookie: ${{ secrets.cookie }}

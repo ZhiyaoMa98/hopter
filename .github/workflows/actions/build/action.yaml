@@ -9,31 +9,71 @@ inputs:
 runs:
   using: "composite"
   steps:
-      - name: Prepare Rust compiler toolchain
-        uses: ./.github/workflows/actions/prepare-rust-toolchain
-        with:
-          cookie: ${{ inputs.cookie }}
+    - name: Prepare Rust compiler toolchain
+      uses: ./.github/workflows/actions/prepare-rust-toolchain
+      with:
+        cookie: ${{ inputs.cookie }}
 
-      - name: Build Hopter
-        run: cargo +segstk-rust build --release
-        shell: bash
+    - name: Build Hopter
+      run: cargo +segstk-rust build --release
+      shell: bash
 
-      - name: Build test "hello world"
-        run: cargo +segstk-rust build --release --example hello_world
-        shell: bash
+    - name: Build test "hello world"
+      run: cargo +segstk-rust build --release --example hello_world
+      shell: bash
 
-      - name: Upload test "hello world"
-        uses: actions/upload-artifact@v4
-        with:
-          name: hello_world
-          path: ./target/thumbv7em-none-eabihf/release/examples/hello_world
+    - name: Upload test "hello world"
+      uses: actions/upload-artifact@v4
+      with:
+        name: hello_world
+        path: ./target/thumbv7em-none-eabihf/release/examples/hello_world
 
-      - name: Build test sleep
-        run: cargo +segstk-rust build --release --example sleep
-        shell: bash
+    - name: Build test sleep
+      run: cargo +segstk-rust build --release --example sleep
+      shell: bash
 
-      - name: Upload test sleep
-        uses: actions/upload-artifact@v4
-        with:
-          name: sleep
-          path: ./target/thumbv7em-none-eabihf/release/examples/sleep
+    - name: Upload test sleep
+      uses: actions/upload-artifact@v4
+      with:
+        name: sleep
+        path: ./target/thumbv7em-none-eabihf/release/examples/sleep
+
+    - name: Build test test-sync-mailbox-notify_by_task
+      run: cargo +segstk-rust build --release --example test-sync-mailbox-notify_by_task
+      shell: bash
+
+    - name: Upload test test-sync-mailbox-notify_by_task
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-sync-mailbox-notify_by_task
+        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-notify_by_task
+
+    - name: Build test test-sync-mailbox-notify_in_advance
+      run: cargo +segstk-rust build --release --example test-sync-mailbox-notify_in_advance
+      shell: bash
+
+    - name: Upload test test-sync-mailbox-notify_in_advance
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-sync-mailbox-notify_in_advance
+        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-notify_in_advance
+
+    - name: Build test test-sync-mailbox-task_not_timeout
+      run: cargo +segstk-rust build --release --example test-sync-mailbox-task_not_timeout
+      shell: bash
+
+    - name: Upload test test-sync-mailbox-task_not_timeout
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-sync-mailbox-task_not_timeout
+        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-task_not_timeout
+
+    - name: Build test test-sync-mailbox-task_timeout
+      run: cargo +segstk-rust build --release --example test-sync-mailbox-task_timeout
+      shell: bash
+
+    - name: Upload test test-sync-mailbox-task_timeout
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-sync-mailbox-task_timeout
+        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-task_timeout

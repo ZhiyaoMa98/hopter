@@ -6,6 +6,7 @@ use crate::{
     interrupt::svc,
     schedule,
     task::{TaskListAdapter, TaskListInterfaces},
+    unrecoverable,
 };
 use core::sync::atomic::{AtomicUsize, Ordering};
 use intrusive_collections::LinkedList;
@@ -101,7 +102,7 @@ impl WaitQueue {
     pub fn wait(&self) {
         die_if_in_isr();
 
-        add_cur_task_to_block_queue(&self);
+        add_cur_task_to_block_queue(self);
 
         // We have put the current task to the wait queue.
         // Tell the scheduler to run another task.
@@ -299,6 +300,6 @@ impl WaitQueue {
 
 fn die_if_in_isr() {
     if schedule::is_running_in_isr() {
-        loop {}
+        unrecoverable::die();
     }
 }

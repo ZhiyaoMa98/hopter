@@ -5,11 +5,26 @@ use intrusive_collections::LinkedList;
 
 /// Additional interfaces for task list.
 pub(crate) trait TaskListInterfaces {
+    fn remove_task(&mut self, task: &Task) -> bool;
     fn push_back_tick_sorted(&mut self, new_task: Arc<Task>);
     fn pop_highest_priority(&mut self) -> Option<Arc<Task>>;
 }
 
 impl TaskListInterfaces for LinkedList<TaskListAdapter> {
+    fn remove_task(&mut self, task: &Task) -> bool {
+        let mut cursor_mut = self.front_mut();
+
+        while let Some(candidate_task) = cursor_mut.get() {
+            if candidate_task == task {
+                cursor_mut.remove();
+                return true;
+            }
+            cursor_mut.move_next();
+        }
+
+        false
+    }
+
     /// Push a new task into the linked list. Maintain ascending order w.r.t.
     /// the tick number to wake up.
     fn push_back_tick_sorted(&mut self, new_task: Arc<Task>) {

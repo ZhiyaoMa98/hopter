@@ -1,0 +1,95 @@
+name: Run Tests for Mailbox
+
+on:
+  workflow_call:
+    secrets:
+      cookie:
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  notify_by_task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit ground truth output
+        run: |
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+        shell: bash
+
+      - name: Run test notify_by_task
+        uses: ./.github/workflows/actions/run-test
+        with:
+          cookie: ${{ secrets.cookie }}
+          test-name: notify_by_task
+          test-image-key: test-sync-mailbox-notify_by_task
+          output-ground-truth: truth.txt
+          timeout: 10s
+
+  notify_in_advance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit ground truth output
+        run: |
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+        shell: bash
+
+      - name: Run test notify_in_advance
+        uses: ./.github/workflows/actions/run-test
+        with:
+          cookie: ${{ secrets.cookie }}
+          test-name: notify_in_advance
+          test-image-key: test-sync-mailbox-notify_in_advance
+          output-ground-truth: truth.txt
+          timeout: 10s
+
+  task_not_timeout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit ground truth output
+        run: |
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+        shell: bash
+
+      - name: Run test task_not_timeout
+        uses: ./.github/workflows/actions/run-test
+        with:
+          cookie: ${{ secrets.cookie }}
+          test-name: task_not_timeout
+          test-image-key: test-sync-mailbox-task_not_timeout
+          output-ground-truth: truth.txt
+          timeout: 10s
+
+  task_timeout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit ground truth output
+        run: |
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+          echo "received" >> truth.txt
+        shell: bash
+
+      - name: Run test task_timeout
+        uses: ./.github/workflows/actions/run-test
+        with:
+          cookie: ${{ secrets.cookie }}
+          test-name: task_timeout
+          test-image-key: test-sync-mailbox-task_timeout
+          output-ground-truth: truth.txt
+          timeout: 10s

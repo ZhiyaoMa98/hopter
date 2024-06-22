@@ -706,3 +706,9 @@ impl Drop for Task {
         }
     }
 }
+
+impl PartialEq for Task {
+    fn eq(&self, other: &Self) -> bool {
+        self as *const _ as usize == other as *const _ as usize
+    }
+}
