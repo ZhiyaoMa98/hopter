@@ -11,7 +11,6 @@ struct Inner {
     count: AtomicUsize,
     pending_count: AtomicUsize,
     wait_task: Spin<Option<Arc<Task>>>,
-    has_timeout: AtomicBool,
     task_notified: AtomicBool,
 }
 
@@ -19,7 +18,6 @@ struct InnerFullAccessor<'a> {
     count: &'a AtomicUsize,
     pending_count: &'a AtomicUsize,
     wait_task: &'a Spin<Option<Arc<Task>>>,
-    has_timeout: &'a AtomicBool,
     task_notified: &'a AtomicBool,
 }
 
@@ -35,7 +33,6 @@ impl<'a> AllowPendOp<'a> for Inner {
             count: &self.count,
             pending_count: &self.pending_count,
             wait_task: &self.wait_task,
-            has_timeout: &self.has_timeout,
             task_notified: &self.task_notified,
         }
     }
@@ -53,19 +50,9 @@ impl<'a> RunPendedOp for InnerFullAccessor<'a> {
         self.count.fetch_add(pending_count, Ordering::SeqCst);
 
         if let Some(wait_task) = self.wait_task.lock_now_or_die().take() {
-            let has_timeout = self.has_timeout.load(Ordering::SeqCst);
-            if has_timeout {
-                let removed = time::remove_task_from_sleep_queue(&wait_task);
-                if removed {
-                    schedule::make_task_ready_and_enqueue(wait_task);
-                    self.count.fetch_sub(1, Ordering::SeqCst);
-                    self.task_notified.store(true, Ordering::SeqCst);
-                }
-            } else {
-                schedule::make_task_ready_and_enqueue(wait_task);
-                self.count.fetch_sub(1, Ordering::SeqCst);
-                self.task_notified.store(true, Ordering::SeqCst);
-            }
+            time::remove_task_from_sleep_queue_allow_isr(wait_task);
+            self.count.fetch_sub(1, Ordering::SeqCst);
+            self.task_notified.store(true, Ordering::SeqCst);
         }
     }
 }
@@ -76,7 +63,6 @@ impl Inner {
             count: AtomicUsize::new(0),
             pending_count: AtomicUsize::new(0),
             wait_task: Spin::new(None),
-            has_timeout: AtomicBool::new(false),
             task_notified: AtomicBool::new(false),
         }
     }
@@ -92,27 +78,7 @@ impl Mailbox {
     pub fn wait(&self) {
         die_if_in_isr();
 
-        let should_block = self.inner.lock().must_with_full_access(|full_access| {
-            if full_access.count.load(Ordering::SeqCst) > 0 {
-                full_access.count.fetch_sub(1, Ordering::SeqCst);
-                return false;
-            }
-
-            full_access.has_timeout.store(false, Ordering::SeqCst);
-            full_access.task_notified.store(false, Ordering::SeqCst);
-
-            schedule::with_current_task_arc(|cur_task| {
-                schedule::set_task_state_block(&cur_task);
-                let mut locked_wait_task = full_access.wait_task.lock_now_or_die();
-                *locked_wait_task = Some(cur_task);
-            });
-
-            true
-        });
-
-        if should_block {
-            svc::svc_block_current_task();
-        }
+        self.wait_until_timeout(100_000_000);
     }
 
     pub fn wait_until_timeout(&self, timeout_ms: u32) -> bool {
@@ -124,7 +90,6 @@ impl Mailbox {
                 return false;
             }
 
-            full_access.has_timeout.store(true, Ordering::SeqCst);
             full_access.task_notified.store(false, Ordering::SeqCst);
 
             schedule::with_current_task_arc(|cur_task| {
@@ -153,19 +118,8 @@ impl Mailbox {
         self.inner.lock().with_access(|access| match access {
             Access::Full { full_access } => match full_access.wait_task.lock_now_or_die().take() {
                 Some(wait_task) => {
-                    let has_timeout = full_access.has_timeout.load(Ordering::SeqCst);
-                    if has_timeout {
-                        let removed = time::remove_task_from_sleep_queue(&wait_task);
-                        if removed {
-                            schedule::make_task_ready_and_enqueue(wait_task);
-                            full_access.task_notified.store(true, Ordering::SeqCst);
-                        } else {
-                            full_access.count.fetch_add(1, Ordering::SeqCst);
-                        }
-                    } else {
-                        schedule::make_task_ready_and_enqueue(wait_task);
-                        full_access.task_notified.store(true, Ordering::SeqCst);
-                    }
+                    time::remove_task_from_sleep_queue_allow_isr(wait_task);
+                    full_access.task_notified.store(true, Ordering::SeqCst);
                 }
                 None => {
                     full_access.count.fetch_add(1, Ordering::SeqCst);

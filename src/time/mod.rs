@@ -1,4 +1,5 @@
 use crate::{
+    config,
     interrupt::svc,
     schedule,
     sync::{Access, AllowPendOp, Interruptable, RefCellSchedSafe, RunPendedOp, Spin},
@@ -7,17 +8,22 @@ use crate::{
 };
 use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use heapless::mpmc::MpMcQueue;
 use intrusive_collections::LinkedList;
 
 struct Inner {
     time_sorted_queue: Spin<LinkedList<TaskListAdapter>>,
+    delete_buffer: DeleteBuffer,
     time_to_wakeup: AtomicBool,
 }
+
+type DeleteBuffer = MpMcQueue<Arc<Task>, { config::MAX_TASK_NUMBER }>;
 
 impl Inner {
     const fn new() -> Self {
         Self {
             time_sorted_queue: Spin::new(LinkedList::new(TaskListAdapter::NEW)),
+            delete_buffer: DeleteBuffer::new(),
             time_to_wakeup: AtomicBool::new(false),
         }
     }
@@ -27,10 +33,12 @@ type SleepQueue = RefCellSchedSafe<Interruptable<Inner>>;
 
 struct InnerFullAccessor<'a> {
     time_sorted_queue: &'a Spin<LinkedList<TaskListAdapter>>,
+    delete_buffer: &'a DeleteBuffer,
     time_to_wakeup: &'a AtomicBool,
 }
 
 struct InnerPendAccessor<'a> {
+    delete_buffer: &'a DeleteBuffer,
     time_to_wakeup: &'a AtomicBool,
 }
 
@@ -41,11 +49,13 @@ impl<'a> AllowPendOp<'a> for Inner {
     fn full_access(&'a self) -> InnerFullAccessor<'a> {
         InnerFullAccessor {
             time_sorted_queue: &self.time_sorted_queue,
+            delete_buffer: &self.delete_buffer,
             time_to_wakeup: &self.time_to_wakeup,
         }
     }
     fn pend_only_access(&'a self) -> InnerPendAccessor<'a> {
         InnerPendAccessor {
+            delete_buffer: &self.delete_buffer,
             time_to_wakeup: &self.time_to_wakeup,
         }
     }
@@ -64,6 +74,13 @@ impl<'a> InnerFullAccessor<'a> {
                 schedule::make_task_ready_and_enqueue(task);
             } else {
                 break;
+            }
+        }
+
+        while let Some(task) = self.delete_buffer.dequeue() {
+            let removed = locked_queue.remove_task(&task);
+            if removed {
+                schedule::make_task_ready_and_enqueue(task);
             }
         }
     }
@@ -139,13 +156,19 @@ pub(crate) fn add_task_to_sleep_queue(task: Arc<Task>, wake_at_tick: u32) {
         });
 }
 
-pub(crate) fn remove_task_from_sleep_queue(task: &Task) -> bool {
-    SLEEP_TASK_QUEUE
-        .lock()
-        .must_with_full_access(|full_access| {
+pub(crate) fn remove_task_from_sleep_queue_allow_isr(task: Arc<Task>) {
+    SLEEP_TASK_QUEUE.lock().with_access(|access| match access {
+        Access::Full { full_access } => {
             let mut locked_queue = full_access.time_sorted_queue.lock_now_or_die();
-            locked_queue.remove_task(task)
-        })
+            let removed = locked_queue.remove_task(&task);
+            if removed {
+                schedule::make_task_ready_and_enqueue(task);
+            }
+        }
+        Access::PendOnly { pend_access } => {
+            pend_access.delete_buffer.enqueue(task).unwrap_or_die();
+        }
+    });
 }
 
 /// A time-based task barrier that allow a task to proceed at a given interval.
