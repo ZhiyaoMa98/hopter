@@ -11,6 +11,6 @@ env:
 
 jobs:
   mailbox:
-    uses: ./.github/workflows/tests/sync/mailbox.yaml
+    uses: ./.github/workflows/mailbox.yaml
     secrets:
       cookie: ${{ secrets.cookie }}

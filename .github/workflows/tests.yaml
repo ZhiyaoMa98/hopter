@@ -53,6 +53,6 @@ jobs:
           timeout: 10s
 
   sync:
-    uses: ./.github/workflows/tests/sync.yaml
+    uses: ./.github/workflows/sync.yaml
     secrets:
       cookie: ${{ secrets.cookie }}
