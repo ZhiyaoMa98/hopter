@@ -90,3 +90,22 @@ jobs:
           test-image-key: test-sync-mailbox-task_timeout
           output-ground-truth: truth.txt
           timeout: 10s
+
+  notify_after_timeout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Emit ground truth output
+        run: touch truth.txt
+        shell: bash
+
+      - name: Run test notify_after_timeout
+        uses: ./.github/workflows/actions/run-test
+        with:
+          cookie: ${{ secrets.cookie }}
+          test-name: notify_after_timeout
+          test-image-key: test-sync-mailbox-notify_after_timeout
+          output-ground-truth: truth.txt
+          timeout: 10s

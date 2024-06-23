@@ -375,6 +375,11 @@ pub(crate) fn make_task_ready_and_enqueue(task: Arc<Task>) {
     })
 }
 
+/// Set the task state to [`Blocked`](TaskState::Blocked). When a blocked task
+/// is switched out of the CPU, the scheduler will not add it back to the
+/// ready queue. The code blocking the task should add the task either to a
+/// waiting queue i.e. [`WaitQueue`](crate::sync::WaitQueue) or to the sleeping
+/// queue in [`time`](crate::time).
 pub(crate) fn set_task_state_block(task: &Task) {
     task.set_state(TaskState::Blocked);
 }

@@ -1,3 +1,5 @@
+use crate::schedule;
+
 pub trait Lethal {
     type T;
     fn unwrap_or_die(self) -> Self::T;
@@ -32,5 +34,11 @@ where
 {
     if cond() {
         die()
+    }
+}
+
+pub fn die_if_in_isr() {
+    if schedule::is_running_in_isr() {
+        die();
     }
 }
