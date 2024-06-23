@@ -10,48 +10,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  hello-world:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Emit ground truth output
-        run: echo "hello world!" > truth.txt
-        shell: bash
-
-      - name: Run test "hello world"
-        uses: ./.github/workflows/actions/run-test
-        with:
-          cookie: ${{ secrets.cookie }}
-          test-name: hello world
-          test-image-key: hello_world
-          output-ground-truth: truth.txt
-
-  sleep:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Emit ground truth output
-        run: |
-          echo "hello" >> truth.txt
-          echo "hello" >> truth.txt
-          echo "hello" >> truth.txt
-          echo "hello" >> truth.txt
-          echo "hello" >> truth.txt
-        shell: bash
-
-      - name: Run test sleep
-        uses: ./.github/workflows/actions/run-test
-        with:
-          cookie: ${{ secrets.cookie }}
-          test-name: sleep
-          test-image-key: sleep
-          output-ground-truth: truth.txt
-          timeout: 10s
-
   sync:
     uses: ./.github/workflows/sync.yaml
     secrets:

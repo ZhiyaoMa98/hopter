@@ -48,6 +48,6 @@ runs:
 
     - name: Check test output
       run: |
-        diff output.txt
+        diff output.txt \
           "examples/tests/${{ inputs.category }}/${{ inputs.sub-category }}/${{ inputs.test-name }}.txt"
       shell: bash
