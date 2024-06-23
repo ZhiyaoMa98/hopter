@@ -17,6 +17,7 @@ fn main(_: cortex_m::Peripherals) {
 
     for _ in 0..5 {
         MAILBOX.wait();
+        hprintln!("received");
     }
 
     semihosting::terminate(true);

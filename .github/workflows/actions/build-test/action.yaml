@@ -1,0 +1,28 @@
+name: Build ELF Image for Testing
+description: "Build the ELF image for the given test case as artifact and upload it."
+
+inputs:
+  category:
+    description: "The name of the test category."
+    required: true
+  sub-category:
+    description: "The name of the test sub-category."
+    required: true
+  test-name:
+    description: "Name of the test to be run."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build test test-{{ $inputs.category }}-{{ $inputs.sub-category }}-{{ $inputs.test-name }}
+      run: |
+        cargo +segstk-rust build --release \
+          --example test-{{ $inputs.category }}-{{ $inputs.sub-category }}-{{ $inputs.test-name }}
+      shell: bash
+
+    - name: Upload test test-{{ $inputs.category }}-{{ $inputs.sub-category }}-{{ $inputs.test-name }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-{{ $inputs.category }}-{{ $inputs.sub-category }}-{{ $inputs.test-name }}
+        path: ./target/thumbv7em-none-eabihf/release/examples/test-{{ $inputs.category }}-{{ $inputs.sub-category }}-{{ $inputs.test-name }}

@@ -39,51 +39,36 @@ runs:
         path: ./target/thumbv7em-none-eabihf/release/examples/sleep
 
     - name: Build test test-sync-mailbox-notify_by_task
-      run: cargo +segstk-rust build --release --example test-sync-mailbox-notify_by_task
-      shell: bash
-
-    - name: Upload test test-sync-mailbox-notify_by_task
-      uses: actions/upload-artifact@v4
+      uses: ./.github/workflows/actions/build-test
       with:
-        name: test-sync-mailbox-notify_by_task
-        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-notify_by_task
+        category: sync
+        sub-category: mailbox
+        test-name: notify_by_task
 
     - name: Build test test-sync-mailbox-notify_in_advance
-      run: cargo +segstk-rust build --release --example test-sync-mailbox-notify_in_advance
-      shell: bash
-
-    - name: Upload test test-sync-mailbox-notify_in_advance
-      uses: actions/upload-artifact@v4
+      uses: ./.github/workflows/actions/build-test
       with:
-        name: test-sync-mailbox-notify_in_advance
-        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-notify_in_advance
+        category: sync
+        sub-category: mailbox
+        test-name: notify_in_advance
 
     - name: Build test test-sync-mailbox-task_not_timeout
-      run: cargo +segstk-rust build --release --example test-sync-mailbox-task_not_timeout
-      shell: bash
-
-    - name: Upload test test-sync-mailbox-task_not_timeout
-      uses: actions/upload-artifact@v4
+      uses: ./.github/workflows/actions/build-test
       with:
-        name: test-sync-mailbox-task_not_timeout
-        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-task_not_timeout
+        category: sync
+        sub-category: mailbox
+        test-name: task_not_timeout
 
     - name: Build test test-sync-mailbox-task_timeout
-      run: cargo +segstk-rust build --release --example test-sync-mailbox-task_timeout
-      shell: bash
-
-    - name: Upload test test-sync-mailbox-task_timeout
-      uses: actions/upload-artifact@v4
+      uses: ./.github/workflows/actions/build-test
       with:
-        name: test-sync-mailbox-task_timeout
-        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-task_timeout
+        category: sync
+        sub-category: mailbox
+        test-name: task_timeout
 
     - name: Build test test-sync-mailbox-notify_in_advance_after_timeout
-      run: cargo +segstk-rust build --release --example test-sync-mailbox-notify_in_advance_after_timeout
-      shell: bash
-
-    - name: Upload test test-sync-mailbox-notify_in_advance_after_timeout
-      uses: actions/upload-artifact@v4
+      uses: ./.github/workflows/actions/build-test
       with:
-        name: test-sync-mailbox-notify_in_advance_after_timeout
-        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-notify_in_advance_after_timeout
+        category: sync
+        sub-category: mailbox
+        test-name: notify_in_advance_after_timeout
