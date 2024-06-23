@@ -78,12 +78,12 @@ runs:
         name: test-sync-mailbox-task_timeout
         path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-task_timeout
 
-    - name: Build test test-sync-mailbox-notify_after_timeout
-      run: cargo +segstk-rust build --release --example test-sync-mailbox-notify_after_timeout
+    - name: Build test test-sync-mailbox-notify_in_advance_after_timeout
+      run: cargo +segstk-rust build --release --example test-sync-mailbox-notify_in_advance_after_timeout
       shell: bash
 
-    - name: Upload test test-sync-mailbox-notify_after_timeout
+    - name: Upload test test-sync-mailbox-notify_in_advance_after_timeout
       uses: actions/upload-artifact@v4
       with:
-        name: test-sync-mailbox-notify_after_timeout
-        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-notify_after_timeout
+        name: test-sync-mailbox-notify_in_advance_after_timeout
+        path: ./target/thumbv7em-none-eabihf/release/examples/test-sync-mailbox-notify_in_advance_after_timeout

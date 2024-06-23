@@ -1,3 +1,5 @@
+//! Test waiting with timeout but getting notified before timeout.
+
 #![no_std]
 #![no_main]
 

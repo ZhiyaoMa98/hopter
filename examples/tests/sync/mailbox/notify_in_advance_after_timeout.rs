@@ -1,3 +1,5 @@
+//! Test in-advance notification on mailbox after a timeout on the mailbox.
+
 #![no_std]
 #![no_main]
 

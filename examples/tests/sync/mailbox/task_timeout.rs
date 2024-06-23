@@ -1,3 +1,5 @@
+//! Test timeout waiting on a mailbox. The timeout is deliberate.
+
 #![no_std]
 #![no_main]
 

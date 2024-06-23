@@ -1,3 +1,6 @@
+//! Test notifying a task from task context. The notification to the mailbox
+//! happens before the task waits on the mailbox.
+
 #![no_std]
 #![no_main]
 

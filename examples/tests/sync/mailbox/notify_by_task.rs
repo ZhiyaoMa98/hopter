@@ -1,3 +1,6 @@
+//! Test notifying a task from another task. The waiting task starts its wait
+//! before the notifying task notifies.
+
 #![no_std]
 #![no_main]
 
