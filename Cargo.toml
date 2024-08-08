@@ -119,7 +119,7 @@ name = "test-task-priority-reduce_priority"
 path = "examples/tests/task/priority/reduce_priority.rs"
 
 [[example]]
-name = "test-task-segmented_stack-/verify_regs_stack_new_function"
+name = "test-task-segmented_stack-verify_regs_stack_new_function"
 path = "examples/tests/task/segmented_stack/verify_regs_stack_new_function.rs"
 
 [[example]]
@@ -129,7 +129,3 @@ path = "examples/tests/task/segmented_stack/nested_functions.rs"
 [[example]]
 name = "test-task-segmented_stack-return_values"
 path = "examples/tests/task/segmented_stack/return_values.rs"
-
-[[example]]
-name = "test-task-segmented_stack-draft"
-path = "examples/tests/task/segmented_stack/draft.rs"
