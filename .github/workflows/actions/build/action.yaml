@@ -127,3 +127,26 @@ runs:
         category: task
         sub-category: priority
         test-name: reduce_priority
+
+    # *** Tests for task - segmented stack ***
+
+    - name: Build test test-task-segmented_stack-verify_regs_stack_new_function
+      uses: ./.github/workflows/actions/build-test
+      with:
+        category: task
+        sub-category: segmented_stack
+        test-name: verify_regs_stack_new_function
+
+    - name: Build test test-task-segmented_stack-nested_functions
+      uses: ./.github/workflows/actions/build-test
+      with:
+        category: task
+        sub-category: segmented_stack
+        test-name: nested_functions
+
+    - name: Build test test-task-segmented_stack-return_values
+      uses: ./.github/workflows/actions/build-test
+      with:
+        category: task
+        sub-category: segmented_stack
+        test-name: return_values

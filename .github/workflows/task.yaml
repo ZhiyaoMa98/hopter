@@ -10,7 +10,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  mailbox:
+  priority:
     uses: ./.github/workflows/priority.yaml
     secrets:
       cookie: ${{ secrets.cookie }}
+
+  segmented_stack:
+    uses: ./.github/workflows/segmented_stack.yaml
+    secrets:
+      cookie: ${{ secrets.cookie }}
+
